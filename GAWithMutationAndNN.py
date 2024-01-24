@@ -27,7 +27,8 @@ class Individual:
         self.fitness = None
 
     def evaluate_fitness(self):
-        pid_values = self.net(torch.FloatTensor([0, 0, 0]))  # Example state for fitness evaluation
+        pid_values = self.net(torch.FloatTensor([0, 0, 0]))  # Example state for fitness evaluation, TODO: change
+        # this for real world application using vision
         self.fitness = evaluate_pid_performance(pid_values[0].item(), pid_values[1].item(), pid_values[2].item())
 
 def crossover(ind1, ind2):
@@ -109,22 +110,22 @@ def main():
     best_net = run_ga(generations, pop_size, mutation_rate)
 
     best_pid_values = best_net(torch.FloatTensor([0, 0, 0]))
-    print(f"Best PID values: P={best_pid_values[0].item()}, I={best_pid_values[1].item()}, D={best_pid_values[2].item()}")
+    # print(f"Best PID values: P={best_pid_values[0].item()}, I={best_pid_values[1].item()}, D={best_pid_values[2].item()}")
 
     # Simulation with the best PID controller
-    pid_controller = PIDController(best_pid_values[0].item(), best_pid_values[1].item(), best_pid_values[2].item())
-    pygame.init()
-    screen = pygame.display.set_mode((800, 600))
-    simulation = MotorSimulation(Motor.from_name("NEO"), pid_controller, screen=screen)
+    # pid_controller = PIDController(best_pid_values[0].item(), best_pid_values[1].item(), best_pid_values[2].item())
+    # pygame.init()
+    # screen = pygame.display.set_mode((800, 600))
+    # simulation = MotorSimulation(Motor.from_name("NEO"), pid_controller, screen=screen)
 
-    while True:
-        simulation.update(0, 0.1),  # Setpoint for the simulation
-        simulation.render()
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                return
+    # while True:
+    #     simulation.update(0, 0.1),  # Setpoint for the simulation
+    #     simulation.render()
+    #     for event in pygame.event.get():
+    #         if event.type == pygame.QUIT:
+    #             pygame.quit()
+    #             return
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()
 
