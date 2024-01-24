@@ -11,72 +11,50 @@ class MotorEnv(gym.Env):
 
     def __init__(self):
         super(MotorEnv, self).__init__()
-        # Define action and observation space
-        self.action_space = spaces.Box(low=0, high=np.inf, shape=(3,), dtype=np.float32)
-        self.observation_space = spaces.Box(low=np.array([-360, -np.inf]), high=np.array([360, np.inf]), dtype=np.float32)
+        self.action_space = spaces.Box(low=0, high=5, shape=(3,), dtype=np.float32)  # PID values
+        self.observation_space = spaces.Box(low=np.array([-180, -np.inf]), high=np.array([180, np.inf]), dtype=np.float32)
 
-        # Motor and PID Controller Initialization
         self.motor = Motor.from_name('NEO')
-        self.pid_controller = PIDController(0.0, 0.0, 0.0)
-
-        # Simulation Parameters
+        self.pid_controller = None  # Initialized in reset
         self.setpoint = 0
         self.dt = 0.1
         self.screen = None
         self.clock = None
         self.simulation = None
-
-        # Time near setpoint tracking
-        self.time_near_setpoint = 0.0
-        self.goal_time = 10.0  # Time in seconds to stay near setpoint for max reward
-        # Add a timer for total elapsed time
-        self.total_elapsed_time = 0.0
-        self.max_time_without_goal = 200.0  # Maximum time allowed without reaching the goal
+        self.simulation_duration = 50  # Duration of each episode
+        self.elapsed_time = 0
 
     def step(self, action):
-        # Update PID Controller with action
-        self.pid_controller.updateConstants(*action)
-
-        # Update Motor Simulation
+        # No PID update during the episode, just simulate the motor
         self.simulation.update(self.setpoint, self.dt)
         angle = self.simulation.angle
         angular_velocity = self.simulation.angular_velocity
 
-        # Update total elapsed time
-        self.total_elapsed_time += self.dt
+        self.elapsed_time += self.dt
+        terminated = self.elapsed_time >= self.simulation_duration
+        truncated = False
+        reward = 0
 
-        # Calculate reward and done condition
-        error = abs(self.setpoint - angle)
-        if error < 1:  # Threshold for being "at setpoint"
-            self.time_near_setpoint += self.dt
-        else:
-            self.time_near_setpoint = 0.0  # Reset if not near setpoint
-
-        reward = -error
-        done = False
-
-        # Check for goal condition or timeout
-        if self.time_near_setpoint >= self.goal_time:
-            reward = 100  # Assign a positive reward for achieving the goal
-            done = True
-        elif self.total_elapsed_time >= self.max_time_without_goal:
-            reward = -100  # Assign a negative reward for taking too long
-            done = True
+        if terminated:
+            # Compute the reward based on the performance at the end of the episode
+            error = np.mean([abs(self.setpoint - self.simulation.angle) for _ in range(100)])  # Example calculation
+            reward = -error  # Negative reward for higher error
 
         self.state = np.array([angle, angular_velocity])
-        return self.state, reward, done, {}
+        info = {}
 
-    def reset(self):
-        # Reset the environment state
-        self.pid_controller = PIDController(0.0, 0.0, 0.0)
+        return self.state, reward, terminated, truncated, info
+
+    def reset(self, *, seed=None, options=None):
+        # Set PID values based on action at the beginning of the episode
+        self.pid_controller = PIDController(*self.action_space.sample())
         self.simulation = MotorSimulation(self.motor, self.pid_controller)
-        self.time_near_setpoint = 0.0  # Reset the counter
-        self.total_elapsed_time = 0.0  # Reset total elapsed time
+        self.elapsed_time = 0
 
         initial_angle = self.simulation.angle
         initial_angular_velocity = self.simulation.angular_velocity
         self.state = np.array([initial_angle, initial_angular_velocity])
-        return self.state
+        return self.state, {}
 
     def render(self, mode='human'):
         if self.screen is None:
@@ -94,18 +72,12 @@ class MotorEnv(gym.Env):
             self.simulation.render()
             self.clock.tick(60)
 
-    def close(self):
-        if self.screen is not None:
-            pygame.quit()
-            self.screen = None
-
-
 # Example usage
-env = MotorEnv()
-obs = env.reset()
-done = False
-while not done:
-    action = env.action_space.sample()
-    obs, reward, done, info = env.step(action)
-    env.render()
-env.close()
+# env = MotorEnv()
+# obs = env.reset()
+# done = False
+# while not done:
+#     action = env.action_space.sample()  # Only sampled once per episode
+#     obs, reward, done, info = env.step(action)
+#     env.render()
+# env.close()

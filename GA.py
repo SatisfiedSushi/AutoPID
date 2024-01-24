@@ -93,7 +93,7 @@ def main():
     # run_simulation(best_pid, motor=neo_motor)
 
     # Test PID controllers
-    test_pid(0.1, 0.,0.5)
+    test_pid(1.1257244030607048, 0.16324408761227135,1.3923534593773446)
 
 
 if __name__ == "__main__":
