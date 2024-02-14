@@ -22,74 +22,75 @@ class PIDNet(nn.Module):
         return x
 
 class Individual:
-    def __init__(self, net):
-        self.net = net
+    def __init__(self, P, I, D):
+        self.P = P
+        self.I = I
+        self.D = D
         self.fitness = None
 
     def evaluate_fitness(self):
-        pid_values = self.net(torch.FloatTensor([0, 0, 0]))  # Example state for fitness evaluation, TODO: change
-        # this for real world application using vision
-        self.fitness = evaluate_pid_performance(pid_values[0].item(), pid_values[1].item(), pid_values[2].item())
+        self.fitness = evaluate_pid_performance(self.P, self.I, self.D)
+
 
 def crossover(ind1, ind2):
-    child1 = Individual(deepcopy(ind1.net))
-    child2 = Individual(deepcopy(ind2.net))
-
-    # Cross over the weights
-    for ((name1, param1), (name2, param2)) in zip(child1.net.named_parameters(), child2.net.named_parameters()):
-        if 'weight' in name1:
-            temp = param1.data.clone()
-            param1.data = param2.data
-            param2.data = temp
-
+    # Simple one-point crossover
+    child1 = Individual((ind1.P + ind2.P) / 2, (ind1.I + ind2.I) / 2, (ind1.D + ind2.D) / 2)
+    child2 = Individual((ind1.P + ind2.P) / 2, (ind1.I + ind2.I) / 2, (ind1.D + ind2.D) / 2)
     return child1, child2
 
+
 def mutate(individual, mutation_rate):
-    for param in individual.net.parameters():
-        if random.random() < mutation_rate:
-            param.data += torch.randn_like(param) * 0.1
+    if random.random() < mutation_rate:
+        individual.P = min(max(individual.P + random.uniform(-0.1, 0.1), 0), 1)
+    if random.random() < mutation_rate:
+        individual.D = min(max(individual.D + random.uniform(-0.1, 0.1), 0), 2)
 
 def create_initial_population(pop_size):
     population = []
     for _ in range(pop_size):
-        net = PIDNet()
-        individual = Individual(net)
+        P = random.uniform(0, 1)  # Adjust range as needed
+        I = 0
+        D = random.uniform(0, 2)  # Adjust range as needed
+        individual = Individual(P, I, D)
         population.append(individual)
     return population
+
 
 def evaluate_pid_performance(P, I, D):
     pid_controller = PIDController(P, I, D)
     simulation = MotorSimulation(Motor.from_name("NEO"), pid_controller)
 
-    # Fitness evaluation parameters
-    setpoint = 0  # Example setpoint for fitness evaluation
-    max_time = 10
+    setpoint = 0
+    max_time = 3
     dt = 0.1
     total_error = 0
-    time_at_setpoint = 0
 
-    for _ in range(int(max_time / dt)):
+    for t in range(int(max_time / dt)):
         simulation.update(setpoint, dt)
         error = abs(simulation.angle - setpoint)
-        total_error += error * dt
-        if error < 1:  # Within threshold of the setpoint
-            time_at_setpoint += dt
+        total_error += error
 
-    fitness = -total_error + time_at_setpoint * 5  # Fitness function
+    # The fitness is inversely proportional to the total error
+    fitness = -total_error
+
     return fitness
+
 
 def run_ga(generations, pop_size, mutation_rate):
     population = create_initial_population(pop_size)
 
     for _ in range(generations):
+        print(f'Generation {_}')
+        # Evaluate fitness
         for individual in population:
             individual.evaluate_fitness()
 
-        population.sort(key=lambda x: x.fitness, reverse=True)  # Maximize fitness
+        # Sort by fitness
+        population.sort(key=lambda x: x.fitness, reverse=True)
 
+        # Selection and breeding
         survivors = population[:pop_size // 2]
         next_generation = survivors[:]
-
         while len(next_generation) < pop_size:
             parent1, parent2 = random.sample(survivors, 2)
             child1, child2 = crossover(parent1, parent2)
@@ -98,34 +99,61 @@ def run_ga(generations, pop_size, mutation_rate):
             next_generation.extend([child1, child2])
 
         population = next_generation
+        print(f'Best fitness: {population[0].fitness} || {population[0].P}, {population[0].I}, {population[0].D}')
 
     best_individual = population[0]
-    return best_individual.net
+    return best_individual
+
+
 
 def main():
-    generations = 50
-    pop_size = 20
-    mutation_rate = 0.2
+    pygame.init()
+    screen_width, screen_height = 800, 600
+    screen = pygame.display.set_mode((screen_width, screen_height))
 
-    best_net = run_ga(generations, pop_size, mutation_rate)
+    # Parameters for simulation
+    generations = 10000
+    pop_size = 1000
+    mutation_rate = 0.1
+    setpoint = 0  # Setpoint for the simulation
+    sim_duration = 3 # Duration of the simulation in seconds
 
-    best_pid_values = best_net(torch.FloatTensor([0, 0, 0]))
-    # print(f"Best PID values: P={best_pid_values[0].item()}, I={best_pid_values[1].item()}, D={best_pid_values[2].item()}")
+    # Run GA
+    best_individual = run_ga(generations, pop_size, mutation_rate)
+    print(f'best_pid || P:{best_individual.P}, I:{best_individual.I}, D:{best_individual.D}')
 
-    # Simulation with the best PID controller
-    # pid_controller = PIDController(best_pid_values[0].item(), best_pid_values[1].item(), best_pid_values[2].item())
-    # pygame.init()
-    # screen = pygame.display.set_mode((800, 600))
-    # simulation = MotorSimulation(Motor.from_name("NEO"), pid_controller, screen=screen)
+    # Rest of your simulation code using best_individual's PID values
 
-    # while True:
-    #     simulation.update(0, 0.1),  # Setpoint for the simulation
-    #     simulation.render()
-    #     for event in pygame.event.get():
-    #         if event.type == pygame.QUIT:
-    #             pygame.quit()
-    #             return
+    while True:  # Main loop to restart the simulation
+        pid_controller = PIDController(best_individual.P, best_individual.I, best_individual.D)
+        simulation = MotorSimulation(Motor.from_name("NEO"), pid_controller, screen=screen)
 
-# if __name__ == "__main__":
-#     main()
+        clock = pygame.time.Clock()
+        DT = 0.1
+        FPS = 165
+        start_time = pygame.time.get_ticks()
+
+        running = True
+        while running:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    return  # Exit the main function and end the program
+
+            current_time = pygame.time.get_ticks()
+            if (current_time - start_time) / 1000 > sim_duration:
+                break  # Break out of the simulation loop to restart it
+
+            simulation.update(setpoint, DT)
+            simulation.render()
+
+            pygame.display.flip()
+            clock.tick(FPS)
+
+    pygame.quit()
+
+
+if __name__ == "__main__":
+    main()
+
 

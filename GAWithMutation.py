@@ -7,7 +7,7 @@ from functools import partial
 # Assuming Motor, PIDController, MotorSimulation, and Individual classes are defined as before
 from Motor import Motor
 from PIDController import PIDController
-from MotorSimulation import MotorSimulation
+from MultiMotorSimulation import MotorSimulation
 
 
 class Individual:

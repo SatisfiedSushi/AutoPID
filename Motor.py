@@ -13,7 +13,7 @@ class Motor:
 
         # Convert max RPM to degrees per second for simulation
         # self.max_angular_velocity = (max_rpm * 360) / 60  # 1 RPM = 360 degrees/60 seconds
-        self.max_angular_velocity = 10
+        self.max_angular_velocity = 1000
 
     @classmethod
     def from_name(cls, motor_name):

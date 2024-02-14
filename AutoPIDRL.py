@@ -6,10 +6,14 @@ from stable_baselines3.common.noise import NormalActionNoise
 import gymnasium as gym
 from stable_baselines3 import DDPG, SAC
 from MotorEnv import MotorEnv
+import pygame
+from MotorSimulation import MotorSimulation
+from Motor import Motor
+from PIDController import PIDController
 
 # Configuration parameters
 USE_SAC = True  # Set to False to use DDPG
-LEARNING_RATE = 1e-3
+LEARNING_RATE = 1e-2
 BATCH_SIZE = 256
 ACTION_NOISE_STD_DEV = 0.2
 LAYER_SIZES = [400, 300]  # Customize your MLP layers here
@@ -46,8 +50,8 @@ else:
     model = DDPG("MlpPolicy", env, action_noise=action_noise, batch_size=BATCH_SIZE,
                  learning_rate=LEARNING_RATE, device="cuda", tensorboard_log=logdir, verbose=1)
 
-seasons = 1
-time_steps = 300000
+seasons = 50
+time_steps = 10000
 
 # Training
 for i in range(seasons):
@@ -55,14 +59,28 @@ for i in range(seasons):
     model.save(os.path.join(models_dir, f"Season {i}"))
 
 # Testing the model
-obs, info = env.reset()
-for i in range(100000000):
-    action, _states = model.predict(obs, deterministic=True)
-    obs, reward, terminated, truncated, info = env.step(action)
-    # print(reward)
-    env.render()
-    if truncated or terminated:
-        obs, info = env.reset()
-        print("Resetting")
+# def test():
+#     while True:
+#         obs, info = env.reset()
+#         action, _states = model.predict(obs, deterministic=True)
+#         obs, reward, done, truncation, info = env.step(action)
+#         pid_controller = PIDController(action[0], 0, action[1])
+#
+#         print(f'P: {action[0]}, I: 0, D: {action[1]}')
+#
+#         pygame.init()
+#         screen = pygame.display.set_mode((800, 600))
+#         pygame.display.set_caption('Motor Simulation')
+#
+#         simulation = MotorSimulation(Motor.from_name('NEO'), pid_controller, screen=screen)
+#
+#         for _ in range(100):
+#             simulation.update(0, 0.1)
+#             simulation.render()
+#             for event in pygame.event.get():
+#                 if event.type == pygame.QUIT:
+#                     pygame.quit()
+#                     return
+#
+# test()
 
-env.close()

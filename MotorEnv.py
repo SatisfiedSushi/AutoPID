@@ -11,49 +11,59 @@ class MotorEnv(gym.Env):
 
     def __init__(self):
         super(MotorEnv, self).__init__()
-        self.action_space = spaces.Box(low=0, high=5, shape=(3,), dtype=np.float32)  # PID values
-        self.observation_space = spaces.Box(low=np.array([-180, -np.inf]), high=np.array([180, np.inf]), dtype=np.float32)
+        self.action_space = spaces.Box(low=np.array([1, -0.2]), high=np.array([2, 0.2]), dtype=np.float32)  # PID values
+        self.observation_space = spaces.Box(low=np.array([-180]), high=np.array([180]), dtype=np.float32)
 
         self.motor = Motor.from_name('NEO')
-        self.pid_controller = None  # Initialized in reset
+        self.pid_controller = None
         self.setpoint = 0
         self.dt = 0.1
         self.screen = None
-        self.clock = None
         self.simulation = None
-        self.simulation_duration = 50  # Duration of each episode
-        self.elapsed_time = 0
+        self.simulation_duration = 10
+        self.threshold = 0.1  # Threshold for staying at setpoint
 
     def step(self, action):
-        # No PID update during the episode, just simulate the motor
-        self.simulation.update(self.setpoint, self.dt)
-        angle = self.simulation.angle
-        angular_velocity = self.simulation.angular_velocity
+        if action[0] == 1:
+            self.pid_controller.P += action[1]
+        elif action[0] == 2:
+            self.pid_controller.D += action[1]
+        self.pid_controller.I = 0
+        self.simulation = MotorSimulation(self.motor, self.pid_controller)
 
-        self.elapsed_time += self.dt
-        terminated = self.elapsed_time >= self.simulation_duration
+        error_scale = 0.0001
+
+        terminated = False
         truncated = False
         reward = 0
 
-        if terminated:
-            # Compute the reward based on the performance at the end of the episode
-            error = np.mean([abs(self.setpoint - self.simulation.angle) for _ in range(100)])  # Example calculation
-            reward = -error  # Negative reward for higher error
+        for _ in range(int(self.simulation_duration / self.dt)):
+            self.simulation.update(self.setpoint, self.dt)
 
-        self.state = np.array([angle, angular_velocity])
-        info = {}
+            # Calculate the shortest angular distance
+            error = self.setpoint - self.simulation.angle
+            error = (error + 180) % 360 - 180  # Adjust for circular nature
+
+            if abs(error) <= self.threshold:
+                reward += 1  # Positive reward for being within threshold
+
+            # Scale the error for the reward calculation
+            error_scale = 0.01  # Adjust this scale factor as needed
+            reward -= (error ** 2) * error_scale  # Squared error to penalize larger errors more
+
+            if terminated or truncated:
+                break
+
+        self.state = np.array([self.simulation.angle])
+        info = {'error': error}
 
         return self.state, reward, terminated, truncated, info
 
     def reset(self, *, seed=None, options=None):
-        # Set PID values based on action at the beginning of the episode
-        self.pid_controller = PIDController(*self.action_space.sample())
+        self.pid_controller = PIDController(0.001,0,0)
         self.simulation = MotorSimulation(self.motor, self.pid_controller)
-        self.elapsed_time = 0
-
-        initial_angle = self.simulation.angle
-        initial_angular_velocity = self.simulation.angular_velocity
-        self.state = np.array([initial_angle, initial_angular_velocity])
+        self.consecutive_threshold_count = 0  # Reset count on reset
+        self.state = np.array([self.simulation.angle])
         return self.state, {}
 
     def render(self, mode='human'):
@@ -61,23 +71,13 @@ class MotorEnv(gym.Env):
             pygame.init()
             self.screen = pygame.display.set_mode((800, 600))
             pygame.display.set_caption('Motor Simulation')
-            self.clock = pygame.time.Clock()
-            self.simulation.screen = self.screen  # Set the screen in MotorSimulation
+            self.simulation.set_screen(self.screen)
 
         if mode == 'human':
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
+                    return
 
             self.simulation.render()
-            self.clock.tick(60)
-
-# Example usage
-# env = MotorEnv()
-# obs = env.reset()
-# done = False
-# while not done:
-#     action = env.action_space.sample()  # Only sampled once per episode
-#     obs, reward, done, info = env.step(action)
-#     env.render()
-# env.close()
+            pygame.display.flip()

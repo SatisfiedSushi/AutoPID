@@ -19,3 +19,6 @@ class PIDController:
         self.D = D
         self.integral = 0
         self.previous_error = 0
+
+    def getConstants(self):
+        return (self.P, self.I, self.D)

@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.optim as optim
 from Motor import Motor
 from PIDController import PIDController
-from MotorSimulation import MotorSimulation
+from MultiMotorSimulation import MotorSimulation
 
 # Constants
 SETPOINT = 0  # Target angle
@@ -12,9 +12,9 @@ DT = 0.1  # Time step for simulation
 FPS = 165  # Frames per second
 SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 600
-SIMULATION_TIME = 20  # Total simulation time in seconds
-NUM_EPOCHS = 1000
-NUM_ITERATIONS = 1000
+SIMULATION_TIME = 5  # Total simulation time in seconds
+NUM_EPOCHS = 100
+NUM_ITERATIONS = 100
 
 # Neural Network for PID Tuning
 class PIDNet(nn.Module):
